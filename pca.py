@@ -1,10 +1,16 @@
 import os
+import re
 import numpy as np
 from PIL import Image
+from PIL import UnidentifiedImageError
 
 # Get list of files.
+FILTER = re.compile("^[^\.]")
 path = r"DataSet"
 files = os.listdir(path)
+# Filter files
+files = list(filter(FILTER.match, files))
+
 
 # Initialise list of image & average image.
 delta = []
@@ -12,7 +18,11 @@ psi = np.zeros((4000000, 1))
 
 # Iterate over files
 for file in files:
-    img = Image.open(path+'/'+file).convert('L')
+    try:
+        img = Image.open(path+'/'+file).convert('L')
+    except (FileNotFoundError, UnidentifiedImageError):
+        print(file, "Can't be opened as an image")
+        continue
     
     delta_i = np.asmatrix(img)
     delta_i = delta_i.flatten().T
