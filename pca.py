@@ -4,10 +4,13 @@ import numpy as np
 from PIL import Image
 from PIL import UnidentifiedImageError
 
-# Get list of files.
+# Define constant
 FILTER = re.compile("^[^\.]")
-path = r"DataSet"
-files = os.listdir(path)
+PATH = r"DataSet"
+EXPECTED_SIZE = (2000, 2000)
+
+# Get list of files.
+files = os.listdir(PATH)
 # Filter files
 files = list(filter(FILTER.match, files))
 
@@ -19,15 +22,20 @@ psi = np.zeros((4000000, 1))
 # Iterate over files
 for file in files:
     try:
-        img = Image.open(path+'/'+file).convert('L')
+        img = Image.open(PATH+'/'+file).convert('L')
     except (FileNotFoundError, UnidentifiedImageError):
         print(file, "Can't be opened as an image")
         continue
     
     delta_i = np.asmatrix(img)
+
+    if delta_i.shape != (2000, 2000):
+        continue
+
     delta_i = delta_i.flatten().T
     delta.append(delta_i)
-    
+        
+    # Accumulate average image.
     psi += delta_i
     
 # Process average image
@@ -40,12 +48,8 @@ for delta_i in delta:
     phi.append(delta_i - psi)
 
 A = np.asarray(phi)
+A = np.squeeze(A, 2)
+A = np.asmatrix(A)
 
-print(A.shape)
-
-#wAAT = np.linalg.eigvals(A*A.T)
-#wATA = np.linalg.eigvals(A.T*A)
-
-#print("wAAT =", wAAT)
-#print("wATA =", wATA)
+(lambda_i, v_i) = np.linalg.eig(A*A.T)
 
