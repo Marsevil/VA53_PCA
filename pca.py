@@ -1,41 +1,76 @@
 import os
+import sys
 import re
 import numpy as np
 from PIL import Image
 from PIL import UnidentifiedImageError
 
-# Define constant
+###################################
+# ---------- Constants ---------- #
+###################################
 FILTER = re.compile("^[^\.]")
-TRAIN_PATH = r"DataSet/Train"
-TEST_PATH = r"DataSet/Test"
+BASE_DIR = r"DataSet"
+TRAIN_PATH = os.path.join(BASE_DIR, r"Train")
+TEST_PATH = os.path.join(BASE_DIR, r"Test")
+MATRIX_FILE = os.path.join(BASE_DIR, r"preProcessedData.npy")
 EXPECTED_SIZE = (2000, 2000)
-VECTOR_SIZE = EXPECTED_SIZE[0] * EXPECTED_SIZE[1]
+EXPECTED_VECTOR_SIZE = EXPECTED_SIZE[0] * EXPECTED_SIZE[1]
+
+
+###################################
+# ---------- Functions ---------- #
+###################################
+def readImageAsVector(filePath):
+    # Open the image
+    img = Image.open(filePath).convert('L')
+    # Convert into numpy flat column vector
+    img = np.asmatrix(img).flatten().T
+    return img
+
+def buildUncorrelatedBasis(inputVectors, minInformationalContrib):
+    # Build a matrix from vectors
+    A = np.empty((inputVectors[0].shape[0], 0))
+    for vec in inputVectors:
+        A = np.c_[A, vec]
+    
+    # Process eigen vals & vectors of ATA
+    (lambda_i, v_i) = np.linalg.eig(A.T*A)
+    # Process eigen vectors of AAT by multiplying by A ((A*A^T)*A*v_i = lambda_i*A*v_i)
+    u_i = A*v_i
+
+    # Passage matrix is concatenate eigen vectors
+    P = u_i
+    # Process P^-1
+    Pi = np.linalg.pinv(u_i)
+
+    return (P, Pi)
+
+
+##############################
+# ---------- Main ---------- #
+##############################
 
 # Get list of files.
 files = os.listdir(TRAIN_PATH)
 # Filter files
-files = list(filter(FILTER.match, files))
+files = list(filter(FILTER.match, files))# Initialise list of image & average image.
 
-
-# Initialise list of image & average image.
 delta = []
 fileNames = []
-psi = np.zeros((4000000, 1))
+psi = np.zeros((EXPECTED_VECTOR_SIZE, 1))
 
 # Iterate over files
 for file in files:
     try:
-        img = Image.open(os.path.join(TRAIN_PATH, file)).convert('L')
+        delta_i = readImageAsVector(os.path.join(TRAIN_PATH, file))
     except (FileNotFoundError, UnidentifiedImageError):
         print(file, "Can't be opened as an image")
         continue
-    
-    delta_i = np.asmatrix(img)
 
-    if delta_i.shape != (2000, 2000):
+    # Test if img have the right size
+    if delta_i.shape != (EXPECTED_VECTOR_SIZE, 1):
         continue
 
-    delta_i = delta_i.flatten().T
     delta.append(delta_i)
     fileNames.append(file)
         
@@ -45,38 +80,45 @@ for file in files:
 # Process average image
 psi /= len(delta)
 
-# Initialise normalized image
-phi = np.empty((4000000, 0))
-
+# Normalize every loaded image
+phi = []
 for delta_i in delta:
-    #phi.append(delta_i - psi)
-    phi = np.c_[phi, delta_i - psi]
+    phi.append(delta_i - psi)
 
-A = phi
+# Load or generate matrix
+P = None
+Pi = None
+if os.path.exists(MATRIX_FILE):
+    with open(MATRIX_FILE, "rb") as f:
+        P = np.load(f)
+        Pi = np.load(f)
+else:
+    (P, Pi) = buildUncorrelatedBasis(phi, None)
+    with open(MATRIX_FILE, "wb") as f:
+        np.save(f, P)
+        np.save(f, Pi)
 
-# Process eigen vectors and value of covariance Matrix AAT through eigen values and vectors of ATA.
-(lambda_i, v_i) = np.linalg.eig(A.T*A)
-u_i = A * v_i
-
-# Define passage matrix P as matrix from concatenate eigen vectors
-P = u_i
-Pi = np.linalg.pinv(P)
-
-vecs = Pi * phi
+# Project all vectors in the new basis
+projectedVecs = []
+for vec in phi:
+    projectedVecs.append(Pi * vec)
 
 # Test with an image.
-testImagePath = os.path.join(TEST_PATH, r"IMG_2147_R.jpeg")
-img = Image.open(testImagePath).convert('L')
-img = np.asmatrix(img)
-img = img.flatten().T
+# Load image
+testImagePath = sys.argv[1]
+img = readImageAsVector(testImagePath)
+# Project vector
 img = Pi * img
-resultDistance = float('inf')
-result = ""
-for vecInd in range(vecs.shape[1]):
-    vec = vecs[:, vecInd]
-    distance = np.linalg.norm(vec - img)
-    if distance < resultDistance :
-        resultDistance = distance
-        result = fileNames[vecInd]
 
-print("Closed image is :", result, "With a distance of", resultDistance)
+# Search for the closest base vector
+resultDistance = float('inf')
+resultFileName = ""
+for vecInd in range(len(projectedVecs)):
+    vec = projectedVecs[vecInd]
+    distance = np.linalg.norm(vec - img)
+    if distance < resultDistance:
+        resultDistance = distance
+        resultFileName = fileNames[vecInd]
+
+print("Closest image is :", resultFileName, "With a distance of", resultDistance)
+
