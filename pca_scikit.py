@@ -9,13 +9,20 @@ FILTER = re.compile("^[^\.]")
 BASE_DIR = r"DataSet"
 TRAIN_PATH = os.path.join(BASE_DIR, r"Train")
 
-files = os.listdir(TRAIN_PATH)
-files = list(filter(FILTER.match, files))
+file_paths = []
+dir_names = list(filter(FILTER.match, os.listdir(TRAIN_PATH)))
+for dir_name in dir_names:
+    dir_path = os.path.join(TRAIN_PATH, dir_name)
+    file_names = list(filter(FILTER.match, os.listdir(dir_path)))
+    for file_name in file_names:
+        file_path = os.path.join(dir_path, file_name)
+        file_paths.append(file_path)
+
 facematrix = []
 facelabel = []
-for file in files:
+for file in file_paths:
     try:
-        img = Image.open(os.path.join(TRAIN_PATH, file)).convert("L")
+        img = Image.open(file).convert("L")
     except (FileNotFoundError, UnidentifiedImageError):
         print(file, "Can't be opened as an image")
         continue
