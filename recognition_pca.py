@@ -1,9 +1,10 @@
 import numpy as np
 from PIL import Image, UnidentifiedImageError
 from sklearn.decomposition import PCA
+from recognition import Recognition
 
 
-class PcaRecognition:
+class PcaRecognition(Recognition):
     def __init__(self) -> None:
         self._pca = None
         self._weights = None
@@ -18,13 +19,13 @@ class PcaRecognition:
         for file in files:
             img = None
             try:
-                img = Image.open(file).convert('L')
+                img = Recognition._load_image(file)
             except (FileNotFoundError, UnidentifiedImageError):
                 print(file, "Can't be opened as an image")
                 # TODO: Drop associated key
                 continue
 
-            img = np.asarray(img).flatten()
+            img = img.flatten()
             facematrix.append(img)
 
         facematrix = np.array(facematrix)
@@ -41,10 +42,13 @@ class PcaRecognition:
 
         flattened_img = img.reshape(1, -1)
 
-        img_weight = self._pca.components_ @ (flattened_img - self._pca.mean_).T
+        img_weight = self._pca.components_ @\
+            (flattened_img - self._pca.mean_).T
         del flattened_img
 
-        euclidian_distances = np.linalg.norm(self._weights - img_weight, axis=0)
+        euclidian_distances = np.linalg.norm(
+                self._weights - img_weight,
+                axis=0)
 
         best_match = np.argmin(euclidian_distances)
 

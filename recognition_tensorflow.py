@@ -1,9 +1,10 @@
 import numpy as np
 from PIL import Image, UnidentifiedImageError
 import tensorflow as tf
+from recognition import Recognition
 
 
-class TensorflowRecognition:
+class TensorflowRecognition(Recognition):
     """
     A class that implement face recognition througt tensorflow ML algorithms
     """
@@ -55,7 +56,7 @@ class TensorflowRecognition:
         for image_path in images_path:
             img = None
             try:
-                img = Image.open(image_path).convert("L")
+                img = Recognition._load_image(image_path)
             except(FileNotFoundError, UnidentifiedImageError):
                 print("Unable to read image %s" % (image_path))
                 continue
@@ -82,9 +83,10 @@ class TensorflowRecognition:
 
         # Build model
         self._model = tf.keras.Sequential([
-            tf.keras.layers.Flatten(input_shape=(2000, 2000)),
-            tf.keras.layers.Dense(32, activation='relu'),
-            tf.keras.layers.Dense(10)
+            tf.keras.layers.Flatten(
+                input_shape=Recognition.IMG_SIZE),
+            tf.keras.layers.Dense(128, activation='relu'),
+            tf.keras.layers.Dense(11)
             ])
 
         self._model.compile(
@@ -94,7 +96,7 @@ class TensorflowRecognition:
                 metrics=["accuracy"]
                 )
 
-        self._model.fit(train_images, train_labels_idx, epochs=10)
+        self._model.fit(train_images, train_labels_idx, epochs=40)
 
         self._probability_model = tf.keras.Sequential([
             self._model,
