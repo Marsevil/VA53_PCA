@@ -1,7 +1,11 @@
 import os
+import psutil
 import re
+import time
 from PIL import Image, UnidentifiedImageError
+from recognition import Recognition
 from recognition_pca import PcaRecognition
+from recognition_tensorflow import TensorflowRecognition
 import numpy as np
 
 """ CONSTANTS """
@@ -26,12 +30,18 @@ for dir_name in DIR_NAMES:
         file_path = os.path.join(directory_path, file_name)
         train_image_list[file_path] = dir_name
 
-recog = PcaRecognition()
+recog = PcaRecognition(0.8)
+#recog = TensorflowRecognition(30)
+start_training_time = time.time()
 recog.train(train_image_list)
+end_training_time = time.time()
+process = psutil.Process(os.getpid())
+time_training_lapsed = end_training_time - start_training_time
 
 # Test with all image
 score = 0
 total = 0
+total_testing_time = 0
 dir_names = list(filter(HIDDEN_FILE_TESTER.match, os.listdir(TEST_DIR)))
 for dir_name in dir_names:
     dir_path = os.path.join(TEST_DIR, dir_name)
@@ -40,13 +50,15 @@ for dir_name in dir_names:
         img_path = os.path.join(dir_path, file_name)
         img = None
         try:
-            img = Image.open(img_path).convert("L")
+            img = Recognition._load_image(img_path)
         except (FileNotFoundError, UnidentifiedImageError):
             print("Unable to read image: %s" % (img_path))
             continue
 
-        img = np.asarray(img)
+        start_time = time.time()
         found_label = recog.find(img)
+        end_time = time.time()
+        total_testing_time += end_time - start_time
 
         if found_label == dir_name:
             score += 1
@@ -56,6 +68,8 @@ for dir_name in dir_names:
         total += 1
 
 print("Ratio : %i / %i = %f" % (score, total, score/total))
-
+testing_time = total_testing_time / total
+print("Training memory print : %f MB" % (process.memory_info().rss / 1024 ** 2))
+print("Training time : %f sec" % (time_training_lapsed))
+print("Average testing time per image : %f sec" % (testing_time))
 print("OK")
-
