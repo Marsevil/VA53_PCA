@@ -1,14 +1,18 @@
 import numpy as np
-from PIL import Image, UnidentifiedImageError
+from PIL import UnidentifiedImageError
 from sklearn.decomposition import PCA
 from recognition import Recognition
 
 
 class PcaRecognition(Recognition):
-    def __init__(self) -> None:
-        self._pca = None
+    def __init__(self, keep_data_ratio: float) -> None:
+        assert keep_data_ratio >= 0 and keep_data_ratio <= 1
+
+        self._eigenfaces = None
         self._weights = None
+        self._mean = None
         self._labels = None
+        self._keep_data_ratio = keep_data_ratio
 
     def train(self, imgList: dict):
         files = list(imgList.keys())
@@ -29,21 +33,33 @@ class PcaRecognition(Recognition):
             facematrix.append(img)
 
         facematrix = np.array(facematrix)
-        self._pca = PCA().fit(facematrix)
+        pca = PCA().fit(facematrix)
 
-        eigenfaces = self._pca.components_
+        # Determine which vectors should be kept according
+        # to the coeff parameter
+        cumulated_variance_ratio =\
+            np.cumsum(pca.explained_variance_ratio_)
+        conditions = cumulated_variance_ratio >= self._keep_data_ratio
+        # Keep only relevent vectors
+        if conditions.any():
+            last_idx_to_keep = np.where(conditions)[0][0]+1
+            self._eigenfaces = pca.components_[:last_idx_to_keep]
+        else:
+            self._eigenfaces = pca.components_
 
-        self._weights = eigenfaces @ (facematrix - self._pca.mean_).T
+        self._mean = pca.mean_
+        self._weights = self._eigenfaces @ (facematrix - self._mean).T
 
     def find(self, img: np.matrix) -> str:
-        assert (self._pca is not None
+        assert (self._eigenfaces is not None
+                and self._mean is not None
                 and self._labels is not None
                 and self._weights is not None)
 
         flattened_img = img.reshape(1, -1)
 
-        img_weight = self._pca.components_ @\
-            (flattened_img - self._pca.mean_).T
+        img_weight = self._eigenfaces @\
+            (flattened_img - self._mean).T
         del flattened_img
 
         euclidian_distances = np.linalg.norm(

@@ -9,10 +9,11 @@ class TensorflowRecognition(Recognition):
     A class that implement face recognition througt tensorflow ML algorithms
     """
 
-    def __init__(self):
+    def __init__(self, n_passes: int):
         self._labels = []
         self._model = None
         self._probability_model = None
+        self._n_passes = n_passes
 
     def _prepare_data(self, img_list: dict) -> tuple:
         """
@@ -96,7 +97,10 @@ class TensorflowRecognition(Recognition):
                 metrics=["accuracy"]
                 )
 
-        self._model.fit(train_images, train_labels_idx, epochs=40)
+        self._model.fit(
+            train_images,
+            train_labels_idx,
+            epochs=self._n_passes)
 
         self._probability_model = tf.keras.Sequential([
             self._model,
